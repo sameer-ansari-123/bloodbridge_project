@@ -128,6 +128,8 @@ def register():
     phone = request.form['phone']
     city = request.form['city']
     role = request.form['role']
+    latitude = request.form.get('latitude') or None
+    longitude = request.form.get('longitude') or None
     
     try:
         db = get_db()
@@ -143,8 +145,8 @@ def register():
             return render_template('index.html', register_error="User with this email already exists!", page='home')
             
         pw = bcrypt.generate_password_hash(pw_raw).decode('utf-8')
-        cursor.execute("INSERT INTO users (full_name, email, password_hash, blood_group, phone, city, role) VALUES (%s, %s, %s, %s, %s, %s, %s)", 
-                       (name, email, pw, bg, phone, city, role))
+        cursor.execute("INSERT INTO users (full_name, email, password_hash, blood_group, phone, city, role, latitude, longitude) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", 
+                       (name, email, pw, bg, phone, city, role, latitude, longitude))
         db.commit()
         
         # Auto-login

@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('donor', 'requester') DEFAULT 'donor',
     is_available BOOLEAN DEFAULT TRUE,
     donations_made INT DEFAULT 0,
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

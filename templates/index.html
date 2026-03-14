@@ -719,6 +719,8 @@
                     class="fas fa-times text-xl"></i></button>
             <h2 class="text-3xl font-black text-slate-900 mb-8 text-center">Join Network</h2>
             <form action="/register" method="POST" class="grid grid-cols-2 gap-4">
+                <input type="hidden" name="latitude" id="reg-lat" value="">
+                <input type="hidden" name="longitude" id="reg-lng" value="">
                 <input type="text" name="name" placeholder="Full Name"
                     class="col-span-2 bg-slate-50 p-4 rounded-xl font-bold border border-slate-200 outline-none focus:border-rose-500 transition"
                     required>
@@ -839,6 +841,20 @@
     <script>
         let currentPartnerId = null;
         let pollingInterval = null;
+
+        // Auto-capture GPS location for registration
+        document.addEventListener('DOMContentLoaded', () => {
+            const latInput = document.getElementById('reg-lat');
+            const lngInput = document.getElementById('reg-lng');
+            if (navigator.geolocation && latInput && lngInput) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    latInput.value = position.coords.latitude;
+                    lngInput.value = position.coords.longitude;
+                }, (error) => {
+                    console.log("GPS location permission denied or error: ", error);
+                });
+            }
+        });
 
         // Securely parse data from DOM attributes
         const appState = document.getElementById('appState').dataset;
