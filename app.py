@@ -547,13 +547,18 @@ def not_found_error(error):
     return jsonify({'error': 'Resource Not Found'}), 404
 
 from init_db import init_db
+from migrate_db import migrate
 
-# Initialize DB (Auto-create tables on Gunicorn startup)
+# Initialize DB (Auto-create tables and migrate on Gunicorn startup)
 try:
     print("Auto-initializing database...")
     init_db()
+    print("Auto-migrating database...")
+    migrate()
 except Exception as e:
     print(f"Skipping auto-init (likely build step or connection error): {e}")
+
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
