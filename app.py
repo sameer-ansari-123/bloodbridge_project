@@ -378,13 +378,20 @@ def search():
             raise Exception("Database connection failed")
         cursor = db.cursor(dictionary=True)
         
-        # Fallback to user profile coordinates if radius provided but no lat/lng
-        if radius and not (lat and lng) and 'user_id' in session:
+        # Always try to get logged in user's location to center map
+        user_lat = None
+        user_lng = None
+        if 'user_id' in session:
             cursor.execute("SELECT latitude, longitude FROM users WHERE id = %s", (session['user_id'],))
             u_loc = cursor.fetchone()
             if u_loc and u_loc.get('latitude') and u_loc.get('longitude'):
-                lat = float(u_loc['latitude'])
-                lng = float(u_loc['longitude'])
+                user_lat = float(u_loc['latitude'])
+                user_lng = float(u_loc['longitude'])
+                
+        # Fallback to user profile coordinates if radius provided but no explicit lat/lng
+        if radius and not (lat and lng) and user_lat and user_lng:
+            lat = user_lat
+            lng = user_lng
                 
         if radius and lat and lng:
             select_clause = """
@@ -424,7 +431,9 @@ def search():
             if donor.get('latitude') is not None: donor['latitude'] = float(donor['latitude'])
             if donor.get('longitude') is not None: donor['longitude'] = float(donor['longitude'])
         db.close()
-        return render_template('index.html', donors=donors, page='search')
+        return render_template('index.html', donors=donors, page='search', 
+                               search_lat=lat, search_lng=lng, 
+                               user_lat=user_lat, user_lng=user_lng)
     except Exception as e:
         print(f"Search Error: {e}")
         return render_template('index.html', donors=[], page='search')

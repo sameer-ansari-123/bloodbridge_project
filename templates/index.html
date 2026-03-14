@@ -864,7 +864,12 @@
     </div>
 
     <!-- Map State Data -->
-    <div id="map-data" data-lat="{{ request.args.get('lat', '') }}" data-lng="{{ request.args.get('lng', '') }}" class="hidden">
+    <div id="map-data" 
+         data-lat="{% if search_lat is defined and search_lat is not none %}{{ search_lat }}{% endif %}" 
+         data-lng="{% if search_lng is defined and search_lng is not none %}{{ search_lng }}{% endif %}" 
+         data-user-lat="{% if user_lat is defined and user_lat is not none %}{{ user_lat }}{% endif %}"
+         data-user-lng="{% if user_lng is defined and user_lng is not none %}{{ user_lng }}{% endif %}"
+         class="hidden">
         {% if donors %}
             {% for donor in donors %}
                 {% if donor.latitude and donor.longitude %}
@@ -916,13 +921,18 @@
             const mapDataNode = document.getElementById('map-data');
             const searchLat = mapDataNode.dataset.lat;
             const searchLng = mapDataNode.dataset.lng;
+            const userLat = mapDataNode.dataset.userLat;
+            const userLng = mapDataNode.dataset.userLng;
 
             let center = [40.7128, -74.0060]; // default fallback (e.g. New York)
-            let hasUserLoc = false;
+            let markerLoc = null;
 
             if (searchLat && searchLng) {
                 center = [parseFloat(searchLat), parseFloat(searchLng)];
-                hasUserLoc = true;
+                markerLoc = center;
+            } else if (userLat && userLng) {
+                center = [parseFloat(userLat), parseFloat(userLng)];
+                markerLoc = center;
             }
             
             const map = L.map('donorsMap').setView(center, 12);
@@ -932,9 +942,9 @@
 
             const bounds = [];
             
-            if (hasUserLoc) {
-                L.marker(center).addTo(map).bindPopup('<b class="text-rose-600">Your Search Location</b>').openPopup();
-                bounds.push(center);
+            if (markerLoc) {
+                L.marker(markerLoc).addTo(map).bindPopup('<b class="text-rose-600">Your Location</b>').openPopup();
+                bounds.push(markerLoc);
             }
 
             // Collect donors into a JavaScript array from DOM
