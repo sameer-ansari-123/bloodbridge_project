@@ -357,24 +357,72 @@ def reset_password(token):
 def search():
     bg = request.args.get('blood_group')
     ct = request.args.get('city')
+    radius = request.args.get('radius')
+    lat = request.args.get('lat')
+    lng = request.args.get('lng')
     
+    # Clean up empty strings
+    if lat == "": lat = None
+    if lng == "": lng = None
+    if radius == "": radius = None
+    
+    try:
+        if lat and lng:
+            lat, lng = float(lat), float(lng)
+    except ValueError:
+        lat, lng = None, None
+        
     try:
         db = get_db()
         if not db:
             raise Exception("Database connection failed")
         cursor = db.cursor(dictionary=True)
         
-        query = "SELECT * FROM users WHERE role = 'donor' AND is_available = 1"
-        params = []
-        if bg:
-            query += " AND blood_group = %s"
-            params.append(bg)
-        if ct:
-            query += " AND city LIKE %s"
-            params.append(f"%{ct}%")
+        # Fallback to user profile coordinates if radius provided but no lat/lng
+        if radius and not (lat and lng) and 'user_id' in session:
+            cursor.execute("SELECT latitude, longitude FROM users WHERE id = %s", (session['user_id'],))
+            u_loc = cursor.fetchone()
+            if u_loc and u_loc.get('latitude') and u_loc.get('longitude'):
+                lat = float(u_loc['latitude'])
+                lng = float(u_loc['longitude'])
+                
+        if radius and lat and lng:
+            select_clause = """
+                SELECT *, 
+                ( 6371 * acos( cos( radians(%s) ) * cos( radians( latitude ) ) 
+                * cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) 
+                * sin( radians( latitude ) ) ) ) AS distance 
+            """
+            query = select_clause + " FROM users WHERE role = 'donor' AND is_available = 1 AND latitude IS NOT NULL AND longitude IS NOT NULL"
+            params = [lat, lng, lat]
+            
+            if bg:
+                query += " AND blood_group = %s"
+                params.append(bg)
+            if ct:
+                query += " AND city LIKE %s"
+                params.append(f"%{ct}%")
+                
+            query += " HAVING distance <= %s ORDER BY distance"
+            params.append(float(radius))
+        else:
+            query = "SELECT * FROM users WHERE role = 'donor' AND is_available = 1"
+            params = []
+            if bg:
+                query += " AND blood_group = %s"
+                params.append(bg)
+            if ct:
+                query += " AND city LIKE %s"
+                params.append(f"%{ct}%")
         
         cursor.execute(query, params)
         donors = cursor.fetchall()
+        
+        # Format types for JSON processing later
+        for donor in donors:
+            if donor.get('distance') is not None: donor['distance'] = float(donor['distance'])
+            if donor.get('latitude') is not None: donor['latitude'] = float(donor['latitude'])
+            if donor.get('longitude') is not None: donor['longitude'] = float(donor['longitude'])
         db.close()
         return render_template('index.html', donors=donors, page='search')
     except Exception as e:

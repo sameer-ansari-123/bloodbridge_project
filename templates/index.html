@@ -9,6 +9,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
         :root {
             --primary: #BE123C;
@@ -199,23 +201,50 @@
                 <h1 class="text-4xl font-black text-slate-900 mb-2">Find <span class="text-rose-600">Heroes</span></h1>
                 <p class="text-slate-500 text-lg font-medium">Connect with verified donors in seconds.</p>
             </div>
-            <form action="/search" method="GET"
-                class="flex gap-4 bg-white p-2 rounded-2xl shadow-lg border border-slate-100 items-center">
+            <form action="/search" method="GET" id="search-form"
+                class="flex gap-4 bg-white p-2 rounded-2xl shadow-lg border border-slate-100 items-center flex-wrap">
+                <input type="hidden" name="lat" id="search-lat" value="{{ request.args.get('lat', '') }}">
+                <input type="hidden" name="lng" id="search-lng" value="{{ request.args.get('lng', '') }}">
+                
                 <select name="blood_group"
                     class="bg-transparent pl-4 pr-8 py-3 font-bold text-slate-700 outline-none cursor-pointer">
                     <option value="">Group</option>
-                    <option>A+</option>
-                    <option>O+</option>
-                    <option>B+</option>
-                    <option>AB+</option>
+                    <option value="A+" {% if request.args.get('blood_group') == 'A+' %}selected{% endif %}>A+</option>
+                    <option value="O+" {% if request.args.get('blood_group') == 'O+' %}selected{% endif %}>O+</option>
+                    <option value="B+" {% if request.args.get('blood_group') == 'B+' %}selected{% endif %}>B+</option>
+                    <option value="AB+" {% if request.args.get('blood_group') == 'AB+' %}selected{% endif %}>AB+</option>
+                    <option value="A-" {% if request.args.get('blood_group') == 'A-' %}selected{% endif %}>A-</option>
+                    <option value="O-" {% if request.args.get('blood_group') == 'O-' %}selected{% endif %}>O-</option>
+                    <option value="B-" {% if request.args.get('blood_group') == 'B-' %}selected{% endif %}>B-</option>
+                    <option value="AB-" {% if request.args.get('blood_group') == 'AB-' %}selected{% endif %}>AB-</option>
                 </select>
                 <div class="w-px h-8 bg-slate-200"></div>
-                <input type="text" name="city" placeholder="City or Zip..."
-                    class="pl-4 pr-4 py-3 outline-none font-medium w-56 text-slate-700 bg-transparent">
+                
+                <select name="radius" class="bg-transparent px-4 py-3 font-bold text-slate-700 outline-none cursor-pointer">
+                    <option value="">Any Distance</option>
+                    <option value="3" {% if request.args.get('radius') == '3' %}selected{% endif %}>Within 3 km</option>
+                    <option value="5" {% if request.args.get('radius') == '5' %}selected{% endif %}>Within 5 km</option>
+                    <option value="10" {% if request.args.get('radius') == '10' %}selected{% endif %}>Within 10 km</option>
+                    <option value="25" {% if request.args.get('radius') == '25' %}selected{% endif %}>Within 25 km</option>
+                </select>
+                <div class="w-px h-8 bg-slate-200"></div>
+
+                <input type="text" name="city" placeholder="City or Zip..." value="{{ request.args.get('city', '') }}"
+                    class="pl-4 pr-4 py-3 outline-none font-medium w-40 text-slate-700 bg-transparent">
+                
+                <button type="button" onclick="getLocationAndSearch()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-xl flex items-center justify-center transition" title="Use my current location">
+                    <i class="fas fa-location-arrow"></i>
+                </button>
+                    
                 <button type="submit"
                     class="btn-primary w-12 h-12 rounded-xl flex items-center justify-center shadow-md"><i
                         class="fas fa-search"></i></button>
             </form>
+        </div>
+        
+        <!-- Interactive Map Container -->
+        <div class="mb-12">
+            <div id="donorsMap" class="w-full h-[400px] rounded-2xl shadow-lg border border-slate-200 z-10 overflow-hidden"></div>
         </div>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-24">
@@ -234,6 +263,9 @@
                                 <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                                 <p class="text-emerald-600 text-xs font-bold uppercase tracking-wider">Available</p>
                             </div>
+                            {% if donor.distance %}
+                            <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase"><i class="fas fa-map-marker-alt"></i> {{ "%.1f"|format(donor.distance) }} km away</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -831,6 +863,24 @@
         {% endif %}
     </div>
 
+    <!-- Map State Data -->
+    <div id="map-data" data-lat="{{ request.args.get('lat', '') }}" data-lng="{{ request.args.get('lng', '') }}" class="hidden">
+        {% if donors %}
+            {% for donor in donors %}
+                {% if donor.latitude and donor.longitude %}
+                <div class="donor-data" 
+                     data-name="{{ donor.full_name | replace('"', '&quot;') }}" 
+                     data-bg="{{ donor.blood_group }}"
+                     data-phone="{{ donor.phone }}"
+                     data-lat="{{ donor.latitude }}"
+                     data-lng="{{ donor.longitude }}"
+                     data-distance="{{ donor.distance if donor.distance is not none else '' }}">
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+
     <!-- App State Data -->
     <div id="appState" data-user-id="{{ session.get('user_id', 0) }}"
         data-register-error="{{ register_error if register_error else '' }}"
@@ -854,7 +904,90 @@
                     console.log("GPS location permission denied or error: ", error);
                 });
             }
+            
+            // Map Initialization for Search Page
+            initDonorsMap();
         });
+        
+        function initDonorsMap() {
+            const mapContainer = document.getElementById('donorsMap');
+            if (!mapContainer) return; // Only execute on pages where the map exists
+
+            const mapDataNode = document.getElementById('map-data');
+            const searchLat = mapDataNode.dataset.lat;
+            const searchLng = mapDataNode.dataset.lng;
+
+            let center = [40.7128, -74.0060]; // default fallback (e.g. New York)
+            let hasUserLoc = false;
+
+            if (searchLat && searchLng) {
+                center = [parseFloat(searchLat), parseFloat(searchLng)];
+                hasUserLoc = true;
+            }
+            
+            const map = L.map('donorsMap').setView(center, 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            const bounds = [];
+            
+            if (hasUserLoc) {
+                L.marker(center).addTo(map).bindPopup('<b class="text-rose-600">Your Search Location</b>').openPopup();
+                bounds.push(center);
+            }
+
+            // Collect donors into a JavaScript array from DOM
+            const donorsList = [];
+            document.querySelectorAll('.donor-data').forEach(node => {
+                const d = node.dataset;
+                donorsList.push({
+                    name: d.name,
+                    bg: d.bg,
+                    phone: d.phone,
+                    lat: parseFloat(d.lat),
+                    lng: parseFloat(d.lng),
+                    distance: d.distance ? parseFloat(d.distance) : null
+                });
+            });
+
+            // Plot Donors
+            donorsList.forEach(d => {
+                const marker = L.marker([d.lat, d.lng]).addTo(map);
+                let popupContent = `<div class="p-1"><b class="text-[15px]">${d.name}</b><br><span class="font-bold text-rose-600">Group ${d.bg}</span><br><a href="tel:${d.phone}" class="text-blue-500 font-medium">${d.phone}</a>`;
+                if(d.distance !== null) popupContent += `<br><span class="text-xs text-slate-500 mt-1 block"><i class="fas fa-location-arrow border-r pr-1 border-slate-300"></i> ${d.distance.toFixed(1)} km away</span>`;
+                popupContent += "</div>";
+                
+                marker.bindPopup(popupContent);
+                bounds.push([d.lat, d.lng]);
+            });
+
+            // Adjust view to show all markers
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, {padding: [50, 50], maxZoom: 14});
+            }
+        }
+
+        function getLocationAndSearch() {
+            const btn = event.currentTarget;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    document.getElementById('search-lat').value = position.coords.latitude;
+                    document.getElementById('search-lng').value = position.coords.longitude;
+                    document.getElementById('search-form').submit();
+                }, (error) => {
+                    console.error(error);
+                    alert("Unable to retrieve location. Please check browser permissions or enter a city.");
+                    btn.innerHTML = originalHtml;
+                }, { timeout: 10000 });
+            } else {
+                alert("Geolocation is not supported by your browser.");
+                btn.innerHTML = originalHtml;
+            }
+        }
 
         // Securely parse data from DOM attributes
         const appState = document.getElementById('appState').dataset;
